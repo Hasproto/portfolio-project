@@ -19,8 +19,11 @@ accessing data from our fantasy football website, www.sportsworldcentral.com.
 - [Example Code](#example-code)
 - [Software Development Kit (SDK)](#software-development-kit-sdk)
 ## Public API
-*Coming Soon*
-We'll be deploying our application soon. Check back for the public API address.
+Our API is hosted at [https://swc-api-container.qk71rwmr9kqmw.us-east-1.cs.amazonlightsail.com/](https://swc-api-container.qk71rwmr9kqmw.us-east-1.cs.amazonlightsail.com/).
+
+You can access the interactive documentation at [https://swc-api-container.qk71rwmr9kqmw.us-east-1.cs.amazonlightsail.com/docs](https://swc-api-container.qk71rwmr9kqmw.us-east-1.cs.amazonlightsail.com/docs).
+
+You can view the OpenAPI Specification (OAS) file at [https://swc-api-container.qk71rwmr9kqmw.us-east-1.cs.amazonlightsail.com/openapi.json](https://swc-api-container.qk71rwmr9kqmw.us-east-1.cs.amazonlightsail.com/openapi.json).
 ## Getting Started
 Since all of the data is public, the SWC API doesn't require any authentication.
 All of the the following data is available using GET endpoints that return
