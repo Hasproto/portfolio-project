@@ -1,6 +1,5 @@
 # ============================================================
-# FILE: src/swcpy/swc_client.py
-# Replace the ENTIRE file with this content.
+#Providing Rich Functionality
 # ============================================================
 
 # --- IMPORTS ---
@@ -40,7 +39,7 @@ class SWCClient:
     # The base web address where your bulk CSV/Parquet files live on GitHub.
     # >>> REPLACE [github ID] with your GitHub username: Hasproto <
     BULK_FILE_BASE_URL = (
-        "https://raw.githubusercontent.com/[github ID]"
+        "https://raw.githubusercontent.com/Hasproto"
         + "/portfolio-project/main/bulk/"
     )
 
@@ -69,6 +68,25 @@ class SWCClient:
         # --- TURN ON RETRY/BACKOFF (only if the user enabled it) ---
         # Wraps call_api with auto-retry: exponential wait + jitter,
         # only on network/HTTP errors, giving up after backoff_max_time seconds.
+        #
+        #
+        # """
+        # below there is a pattern called closure. similar to this example:
+        # def outer(x):
+        #     def inner(y):
+        #         return x + y
+        # return inner # returning a function that remember (point always to) x.
+
+        # outer(3)(4)
+        # same as
+         
+        # add = outer(3)
+        # add(4)
+        # You can add more. 3 is remembered by inner
+        # add(5)
+        #  and so on
+               
+        # """
         if self.backoff:
             self.call_api = backoff.on_exception(
                 wait_gen=backoff.expo,                                  # wait 1s, 2s, 4s, 8s...
@@ -92,3 +110,134 @@ class SWCClient:
 
         # Log the final filename dictionary (DEBUG level)
         logger.debug(f"Bulk file dictionary: {self.BULK_FILE_NAMES}")
+    # ============================================================
+    # Performing Logging
+    # ============================================================
+
+    def call_api(self,
+        api_endpoint: str,          # which endpoint to hit, e.g. "/v0/players/"
+        api_params: dict = None     # optional query filters, e.g. {"limit": 10}; defaults to none
+    ) -> httpx.Response:            # type hint: this method returns an HTTP response object
+        """Makes API call and logs errors."""
+
+        # --- CLEAN UP THE PARAMETERS ---
+        # If filters were passed, rebuild the dict keeping only the ones
+        # that actually have a value. Drops any that came in as None,
+        # so we don't send meaningless "?limit=None" to the API.
+        if api_params:
+            api_params = {
+                key: val
+                for key, val in api_params.items()
+                if val is not None
+            }
+
+        # --- TRY THE CALL, HANDLE FAILURES ---
+        try:
+            # Context manager: opens an HTTP client, runs the call,
+            # then cleans up the connection automatically (even on error).
+            # httpx.Client also pools/reuses connections = more efficient.
+            with httpx.Client(base_url=self.swc_base_url) as client:
+
+                # DEBUG log: shows exactly what we're about to send
+                # (only prints if the user set log level to DEBUG)
+                logger.debug(
+                    f"base_url: {self.swc_base_url}, "
+                    f"api_endpoint: {api_endpoint}, "
+                    f"api_params: {api_params}"
+                )
+
+                # The actual GET request
+                response = client.get(api_endpoint, params=api_params)
+
+                # DEBUG log: shows the data that came back
+                logger.debug(f"Response JSON: {response.json()}")
+
+                return response
+
+        # --- FAILURE TYPE 1: server replied, but with a bad status code ---
+        # (e.g. 404 Not Found, 500 Server Error). It HAS a status code.
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"HTTP status error occurred: "
+                f"{e.response.status_code} {e.response.text}"
+            )
+            raise   # re-throw so the retry/backoff layer can catch it
+
+        # --- FAILURE TYPE 2: request never reached the server ---
+        # (network down, DNS fail, timeout). No status code exists.
+        except httpx.RequestError as e:
+            logger.error(f"Request error occurred: {str(e)}")
+            raise   # re-throw so the retry/backoff layer can catch it
+
+
+
+
+
+
+    # ============================================================
+    # Hiding Your API’s Complicated Detai
+    # ============================================================
+
+    def get_health_check(self) -> httpx.Response:
+        """Checks if the API is running and healthy.
+
+        Use this to confirm the API is up before making bigger calls.
+
+        Returns:
+            An httpx.Response with the HTTP status and JSON from the API.
+        """
+        logger.debug("Entered health check")
+        endpoint_url = self.HEALTH_CHECK_ENDPOINT   # the "/" constant defined earlier
+        return self.call_api(endpoint_url)          # route through central call_api (gets logging + retry)
+
+    def list_leagues(
+        self,
+        skip: int = 0,                          # pagination: how many to skip
+        limit: int = 100,                       # pagination: max to return
+        minimum_last_changed_date: str = None,  # delta query: only items changed since this date
+        league_name: str = None,                # filter by league name
+    ) -> List[League]:                          # returns a LIST of validated League objects
+        """Returns a list of Leagues filtered by the given parameters.
+
+        Calls the v0/leagues endpoint and returns League objects.
+
+        Returns:
+            A list of schemas.League objects, one per SWC fantasy league.
+        """
+        logger.debug("Entered list leagues")
+
+        # Bundle the user's filters into one dictionary
+        params = {
+            "skip": skip,
+            "limit": limit,
+            "minimum_last_changed_date": minimum_last_changed_date,
+            "league_name": league_name,
+        }
+
+        # Send it through the central method (any None values get stripped inside call_api)
+        response = self.call_api(self.LIST_LEAGUES_ENDPOINT, params)
+
+        # Turn the raw JSON (a list of dicts) into a list of validated Pydantic League objects.
+        # For each dict, League(**dict) unpacks its key-value pairs into the League constructor.
+        # Pydantic validates here — bad data errors out at this line.
+        return [League(**league) for league in response.json()]
+    # ============================================================
+    #  Supporting Bulk Downloads
+    # ============================================================    
+    def get_bulk_player_file(self) -> bytes:        # returns BYTES, not text — Parquet is binary
+        """Returns a bulk file with player data."""
+        logger.debug("Entered get bulk player file")
+
+        # Build the full URL: base GitHub URL + the player filename (with .csv or .parquet already attached)
+        player_file_path = self.BULK_FILE_BASE_URL + self.BULK_FILE_NAMES["players"]
+
+        # NOTE: uses httpx.get() directly, NOT self.call_api().
+        # follow_redirects=True handles GitHub's redirects when serving raw files.
+        response = httpx.get(player_file_path, follow_redirects=True)
+
+        # 200 = HTTP "OK". Only return the file contents if the download succeeded.
+        if response.status_code == 200:
+            logger.debug("File downloaded successfully")
+            return response.content   # the raw binary contents of the file
+        
+        
