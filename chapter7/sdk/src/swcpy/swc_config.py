@@ -1,3 +1,4 @@
+# Has: SWCClient is the main class in my swcpy SDK. It's the thing that turns "make an HTTP request to my API'" into "call a Python method"
 # --- READING SETTINGS FROM OUTSIDE THE CODE ---
 # 'os' lets Python read settings stored in your computer's environment
 # (like the API address), so you don't hard-code them into the source.
