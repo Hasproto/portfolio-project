@@ -54,5 +54,5 @@ response = client.get(self.HEALTH_CHECK_ENDPOINT)
 print(response.json())
 ```
 ## Software Development Kit (SDK)
-*Coming Soon*
-Check back for the Python SDK for our API.
+If you are a Python user, you can use the swcpy SDK to interact with our API.
+Full information is available [here](sdk/README.md).
